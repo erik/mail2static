@@ -1,3 +1,4 @@
+import datetime as dt
 import os
 import os.path
 import json
@@ -71,11 +72,56 @@ def receive_mail(sender, to, subject, body, files):
         print(f'bad secret: {secret}')
         return
 
-    print(post)
     markdown = html_to_markdown(body)
+    (title, body) = split_post_content(markdown)
+
+    print(f'''
+    title => {title}
+    markdown => {body}
+    files => {files}
+    ''')
+
+    write_blog_post(blog_config, post_dir, title, body, files)
 
 
-SUBJECT_LINE_RE = re.compile('^.* <([^>]+)> ([\w/]+)')
+def move_asset(asset_path, cid, path):
+    renamed = os.path.join(asset_path, cid)
+
+    print(f'moving {path} -> {renamed}')
+    os.rename(path, renamed)
+
+    return renamed
+
+
+def write_blog_post(blog_config, post_dir, title, body, files):
+    post_file = generate_post_name(title)
+
+    base_path = os.path.join(
+        config['git']['clone_dir'],
+        blog_config['directory'])
+
+    assets_path = os.path.join(base_path, blog_config['asset_path'])
+    posts_path = os.path.join(base_path, blog_config['post_path'], post_dir)
+
+    os.makedirs(assets_path, exist_ok=True)
+    os.makedirs(posts_path, exist_ok=True)
+
+    for cid, path in files.items():
+        asset_url = os.path.join('/', blog_config['asset_path'], cid)
+        move_asset(assets_path, cid, path)
+
+        body = body.replace(f'cid:{cid}', asset_url)
+
+    post_path = os.path.join(posts_path, post_file)
+
+    with open(post_path, 'w') as fp:
+        fp.write(blog_config['post_template'].format(
+            content=body,
+            title=title
+        ))
+
+
+SUBJECT_LINE_RE = re.compile(r'^.* <([^>]+)> ([\w/]+)')
 
 
 def split_subject_line(subject):
@@ -89,7 +135,7 @@ def split_subject_line(subject):
 
     match = re.match(SUBJECT_LINE_RE, subject)
     if match:
-        path = os.path.relpath(match.group(2), '/')
+        path = os.path.normpath('/' + match.group(2))[1:]
         return (match.group(1), path)
 
     return (None, None)
@@ -101,12 +147,37 @@ def blog_config_for_recipient(to_address):
             return c
 
 
+def split_post_content(markdown):
+    """Take the first non-empty line of the post as the title."""
+    lines = markdown.splitlines()
+    title_line = None
+
+    for i, line in enumerate(lines):
+        if line.strip() != '':
+            title_line = i
+            break
+
+    if title_line is None:
+        return ('untitled', '\n'.join(lines))
+
+    return (lines[title_line], '\n'.join(lines[title_line+1:]))
+
+
+TITLE_POST_RE = re.compile(r'[^\w]')
+
+
+def generate_post_name(title):
+    date = dt.datetime.now().strftime('%Y-%m-%d')
+    title = re.sub(TITLE_POST_RE, '_', title)
+    return f'{date}-{title}.md'
+
+
 def html_to_markdown(html):
     # TODO: Make this configurable
     proc = subprocess.Popen([
         'pandoc',
         '-f', 'html-native_spans-native_divs',
-        '-t', 'markdown-escaped_line_breaks'
+        '-t', 'markdown-escaped_line_breaks-all_symbols_escapable-header_attributes-auto_identifiers-link_attributes'
     ], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 
     out, err = proc.communicate(html.encode('ascii'))
