@@ -16,6 +16,8 @@ setup(
     python_requires='>=3.5',
     license='AGPLv3+',
     install_requires=[
+        'flask==1.0.2',
+        'toml==0.10.0',
     ],
     classifiers=[
     ]
