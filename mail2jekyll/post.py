@@ -55,7 +55,7 @@ def handle_new_mail(config, sender, subject, body, attachments):
         print(f'bad secret: {secret}')
         return
 
-    body = rewrite_asset_locations(config, base_path, body, attachments)
+    body = rewrite_asset_locations(config, post_dir, body, attachments)
 
     markdown = html_to_markdown(body)
     (title, body) = split_post_content(markdown)
@@ -69,8 +69,13 @@ def handle_new_mail(config, sender, subject, body, attachments):
     write_post(config, base_path, post_dir, title, body)
 
 
-def rewrite_asset_locations(config, base_path, body, attachments):
-    assets_path = os.path.join(base_path, config['asset_base_path'])
+def rewrite_asset_locations(config, post_dir, body, attachments):
+    # TODO: include post title to uniqueify?
+    assets_path = os.path.join(
+        config['directory'],
+        config['asset_base_path'],
+        post_dir
+    )
     os.makedirs(assets_path, exist_ok=True)
 
     for cid, (temp_path, name) in attachments.items():
@@ -80,7 +85,12 @@ def rewrite_asset_locations(config, base_path, body, attachments):
 
         print(f'rename {temp_path} -> {new_path}')
 
-        asset_url = os.path.join('/', config['asset_base_url'], name)
+        asset_url = os.path.join(
+            '/',
+            config['asset_base_url'],
+            post_dir,
+            name
+        )
         body = body.replace(f'cid:{cid}', asset_url)
 
     return body
