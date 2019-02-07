@@ -1,0 +1,23 @@
+[http]
+host = '127.0.0.1'
+port = 8080
+debug = true
+
+[mailgun]
+api_key = '...'
+
+[sites.testblog]
+before = 'echo "before post is added"'
+after = 'echo "after post is added"'
+directory = '/path/to/directory'
+post_base_path = '_posts/'
+asset_base_path = 'assets/'
+asset_base_url = '/assets/'
+inbox_address = '...'
+secret = '...'
+approved_senders = []
+post_template = '''---
+layout: post
+title: {title}
+---
+{content}'''
