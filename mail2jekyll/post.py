@@ -31,18 +31,10 @@ class ContentQueue:
     files={attachments}
         ''')
 
-        site_config = self.site_config_for_recipient(recipient)
-        base_path = os.path.join(
-            self._config['git']['clone_dir'],
-            site_config['directory']
-        )
-
-        # TODO: need to refresh git state at this point.
         # TODO: need to hold lock on git
 
         handle_new_mail(
-            site_config,
-            base_path,
+            self.site_config_for_recipient(recipient),
             sender,
             subject,
             body,
@@ -50,15 +42,20 @@ class ContentQueue:
         )
 
 
-def handle_new_mail(site_config, base_path, sender, subject, body, attachments):
-    # TODO: check that sender is in config.approved_senders
+def handle_new_mail(config, sender, subject, body, attachments):
+    approved_senders = config['approved_senders']
+    if approved_senders and sender not in approved_senders:
+        print(f'{sender} is not in whitelist: {approved_senders}')
+        return
+
+    base_path = config['directory']
 
     (secret, post_dir) = split_subject_line(subject)
-    if secret != site_config['secret']:
+    if secret != config['secret']:
         print(f'bad secret: {secret}')
         return
 
-    body = rewrite_asset_locations(site_config, base_path, body, attachments)
+    body = rewrite_asset_locations(config, base_path, body, attachments)
 
     markdown = html_to_markdown(body)
     (title, body) = split_post_content(markdown)
