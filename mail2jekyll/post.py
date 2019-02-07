@@ -66,11 +66,11 @@ def handle_new_mail(config, sender, subject, body, attachments):
     files => {attachments}
     ''')
 
-    write_post(site_config, base_path, post_dir, title, body)
+    write_post(config, base_path, post_dir, title, body)
 
 
-def rewrite_asset_locations(site_config, base_path, body, attachments):
-    assets_path = os.path.join(base_path, site_config['asset_base_path'])
+def rewrite_asset_locations(config, base_path, body, attachments):
+    assets_path = os.path.join(base_path, config['asset_base_path'])
     os.makedirs(assets_path, exist_ok=True)
 
     for cid, (temp_path, name) in attachments.items():
@@ -80,19 +80,19 @@ def rewrite_asset_locations(site_config, base_path, body, attachments):
 
         print(f'rename {temp_path} -> {new_path}')
 
-        asset_url = os.path.join('/', site_config['asset_base_url'], name)
+        asset_url = os.path.join('/', config['asset_base_url'], name)
         body = body.replace(f'cid:{cid}', asset_url)
 
     return body
 
 
-def write_post(site_config, base_path, post_dir, title, body):
+def write_post(config, base_path, post_dir, title, body):
     # TODO: need to sanitize name here.
     post_file = generate_post_name(title)
 
     posts_path = os.path.join(
         base_path,
-        site_config['post_base_path'],
+        config['post_base_path'],
         post_dir
     )
 
@@ -101,13 +101,13 @@ def write_post(site_config, base_path, post_dir, title, body):
     post_path = os.path.join(posts_path, post_file)
 
     with open(post_path, 'w') as fp:
-        fp.write(site_config['post_template'].format(
+        fp.write(config['post_template'].format(
             content=body,
             title=title
         ))
 
 
-SUBJECT_LINE_RE = re.compile(r'^.* <([^>]+)> ([\w/]+)')
+SUBJECT_LINE_RE = re.compile(r'^.*?<([^>]+)> ([\w/]+)')
 
 
 def split_subject_line(subject):
