@@ -3,6 +3,12 @@ host = '127.0.0.1'
 port = 8080
 debug = true
 
+[smtp]
+host = 'smtp.wherever.org'
+port = 465
+email = '...'
+password = '...'
+
 [mailgun]
 api_key = '...'
 

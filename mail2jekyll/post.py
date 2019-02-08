@@ -6,6 +6,8 @@ import re
 import subprocess
 import tempfile
 
+from mail2jekyll import mailer
+
 
 # TODO: Make this celery-based or remove complexity.
 # maybe a threadpool even
@@ -33,6 +35,7 @@ class ContentQueue:
 
         # TODO: need to hold lock on site if we're modeling this as a queue.
         handle_new_mail(
+            self._config,
             self.site_config_for_recipient(recipient),
             sender,
             subject,
@@ -41,7 +44,7 @@ class ContentQueue:
         )
 
 
-def handle_new_mail(config, sender, subject, body, attachments):
+def handle_new_mail(root_config, config, sender, subject, body, attachments):
     approved_senders = config['approved_senders']
     if approved_senders and sender not in approved_senders:
         print(f'{sender} is not in whitelist: {approved_senders}')
@@ -58,11 +61,19 @@ def handle_new_mail(config, sender, subject, body, attachments):
     body = rewrite_asset_locations(config, post_dir, body, attachments)
     markdown = html_to_markdown(body)
 
-    write_post(config, post_dir, markdown)
+    title = write_post(config, post_dir, markdown)
 
     # TODO: on exception script?
     if 'after_run' in config:
         execute_script(config['after_run'], config['directory'])
+
+    # TODO: this needs some tweaking. need to send on failure as well
+    if 'owner' in config:
+        mailer.send_text_email(
+            root_config['smtp'],
+            to_addr=sender,
+            subject=f'[mail2jekyll] Post Created: {title}',
+            body='Automated notice, go check it out.')
 
 
 def execute_script(script, directory):
@@ -116,8 +127,9 @@ def write_post(config, post_dir, markdown):
     with open(post_path, 'w') as fp:
         fp.write(config['post_template'].format(
             content=body,
-            title=title
-        ))
+            title=title))
+
+    return title
 
 
 SUBJECT_LINE_RE = re.compile(r'^.*?<([^>]+)> ([\w/]+)')
