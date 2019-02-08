@@ -43,8 +43,10 @@ def receive_mailgun_message():
 def handle_mailgun_form_data(form, files):
     body = form['stripped-html']
 
-    content_map = json.loads(form['content-id-map'])
-    attachments = write_mailgun_attachments(content_map, files, body)
+    attachments = {}
+    if 'content-id-map' in form:
+        content_map = json.loads(form['content-id-map'])
+        attachments = write_mailgun_attachments(content_map, files, body)
 
     return dict(
         sender=form['sender'],
