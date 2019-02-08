@@ -7,8 +7,8 @@ debug = true
 api_key = '...'
 
 [sites.testblog]
-before = 'echo "before post is added"'
-after = 'echo "after post is added"'
+before_run = 'echo "before post is added"'
+after_run = 'echo "after post is added"'
 directory = '/path/to/directory'
 post_base_path = '_posts/'
 asset_base_path = 'assets/'

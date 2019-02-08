@@ -31,8 +31,7 @@ class ContentQueue:
     files={attachments}
         ''')
 
-        # TODO: need to hold lock on git
-
+        # TODO: need to hold lock on site if we're modeling this as a queue.
         handle_new_mail(
             self.site_config_for_recipient(recipient),
             sender,
@@ -48,25 +47,26 @@ def handle_new_mail(config, sender, subject, body, attachments):
         print(f'{sender} is not in whitelist: {approved_senders}')
         return
 
-    base_path = config['directory']
-
     (secret, post_dir) = split_subject_line(subject)
     if secret != config['secret']:
         print(f'bad secret: {secret}')
         return
 
+    if 'before_run' in config:
+        execute_script(config['before_run'], config['directory'])
+
     body = rewrite_asset_locations(config, post_dir, body, attachments)
-
     markdown = html_to_markdown(body)
-    (title, body) = split_post_content(markdown)
 
-    print(f'''
-    title => {title}
-    markdown => {body}
-    files => {attachments}
-    ''')
+    write_post(config, post_dir, markdown)
 
-    write_post(config, base_path, post_dir, title, body)
+    # TODO: on exception script?
+    if 'after_run' in config:
+        execute_script(config['after_run'], config['directory'])
+
+
+def execute_script(script, directory):
+    subprocess.run(script, shell=True, cwd=directory)
 
 
 def rewrite_asset_locations(config, post_dir, body, attachments):
@@ -96,12 +96,15 @@ def rewrite_asset_locations(config, post_dir, body, attachments):
     return body
 
 
-def write_post(config, base_path, post_dir, title, body):
+def write_post(config, post_dir, markdown):
+    (title, body) = split_post_content(markdown)
+    print(f'title => {title}\nmarkdown => {body}')
+
     # TODO: need to sanitize name here.
     post_file = generate_post_name(title)
 
     posts_path = os.path.join(
-        base_path,
+        config['directory'],
         config['post_base_path'],
         post_dir
     )
@@ -164,15 +167,21 @@ def generate_post_name(title):
 
 
 def html_to_markdown(html):
-    # TODO: Make this configurable
-    proc = subprocess.Popen([
-        'pandoc',
-        '-f', 'html-native_spans-native_divs',
-        '-t', 'markdown-escaped_line_breaks-all_symbols_escapable-header_attributes-auto_identifiers-link_attributes'
-    ], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-
-    out, err = proc.communicate(html.encode('ascii'))
-    if err:
-        raise Exception(err)
-
-    return out.decode('utf-8')
+    # TODO: make this configurable
+    return subprocess.run(
+        ['pandoc',
+         '-f', ('html'
+                '-native_spans'
+                '-native_divs'),
+         '-t', ('markdown'
+                '-escaped_line_breaks'
+                '-all_symbols_escapable'
+                '-header_attributes'
+                '-raw_html'
+                '-auto_identifiers'
+                '-link_attributes')],
+        stdout=subprocess.PIPE,
+        universal_newlines=True,
+        input=html,
+        check=True
+    ).stdout
