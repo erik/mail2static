@@ -6,6 +6,8 @@ import json
 import re
 import subprocess
 import tempfile
+import textwrap
+import traceback
 
 import attr
 
@@ -30,9 +32,6 @@ class MailData:
         self.post_path = path
 
 
-SUBJECT_LINE_RE = re.compile(r'^.*?<([^>]+)> ([\w/]+)')
-
-
 def split_subject_line(subject):
     """Return tuple of (secret, post_dir). Strips out ``re:``, etc.
 
@@ -41,8 +40,8 @@ def split_subject_line(subject):
     >>> split_subject_line('RE: FWD: FWD: fake news')
     (None, None)
     """
-
-    match = re.match(SUBJECT_LINE_RE, subject)
+    subject_line_re = re.compile(r'^.*?<([^>]+)> ([\w/]+)')
+    match = re.match(subject_line_re, subject)
     if match:
         path = os.path.normpath('/' + match.group(2))[1:]
         return (match.group(1), path)
@@ -51,11 +50,40 @@ def split_subject_line(subject):
 
 
 class PostManager:
+    _EMAIL_TEMPLATES = {
+        'created': {
+            'subject': '[mail2jekyll] post created: "{title}"',
+            'body': textwrap.dedent(
+                '''\
+                Hi there,
+
+                Looks like {sender} just created a new post, "{title}".
+
+                Hopefully this was you. If it's spam, sorry.
+                ''')
+        },
+
+        'failed': {
+            'subject': '[mail2jekyll] failed to create post',
+            'body': textwrap.dedent(
+                '''\
+                Hi there,
+
+                Seems like that post failed to render for some reason.
+
+                Traceback:
+
+                {traceback}
+                ''')
+        }
+    }
+
     def __init__(self, config):
         self._config = config
         self._sites = {
-            c['inbox_address']: SiteManager(c)
-            for c in config.get('sites', []).values()
+            site_config['inbox_address']: SiteManager(name, site_config)
+            for name, site_config
+            in config.get('sites', []).items()
         }
 
     def _site_for_mail(self, mail_data):
@@ -75,21 +103,40 @@ class PostManager:
 
         try:
             title = site.create_post(mail_data)
-
-            if 'owner' in site._config:
-                mailer.send_text_email(
-                    self._config['smtp'],
-                    to_addr=mail_data.sender,
-                    subject=f'[mail2jekyll] Post Created: {title}',
-                    body='Automated notice, go check it out.')
-
+            self._send_post_notification(
+                recipient=mail_data.sender,
+                template='created',
+                params={
+                    'title': title,
+                    'sender': mail_data.sender,
+                })
         except Exception as exc:
             print(f'bad things: {exc}')
-            raise exc
+
+            exc_info = traceback.format_exc()
+
+            self._send_post_notification(
+                recipient=mail_data.sender,
+                template='failed',
+                params={
+                    'mail': mail_data,
+                    'exception': exc,
+                    'traceback': exc_info
+                })
+
+    def _send_post_notification(self, recipient, template, params):
+        template = self._EMAIL_TEMPLATES[template]
+
+        mailer.send_text_email(
+            self._config['smtp'],
+            to_addr=recipient,
+            subject=template['subject'].format(**params),
+            body=template['body'].format(**params))
 
 
 class SiteManager:
-    def __init__(self, site_config):
+    def __init__(self, name, site_config):
+        self._name = name
         self._config = site_config
 
     def create_post(self, mail_data):
@@ -99,8 +146,9 @@ class SiteManager:
         markdown = _html_to_markdown(body)
 
         title = self._write_post(mail_data.post_path, markdown)
-
         self._execute_script('after_run')
+
+        return title
 
     def is_authenticated(self, mail_data):
         senders = self._config.get('approved_senders', [])
