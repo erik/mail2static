@@ -17,8 +17,6 @@ def send_text_email(config, to_addr, subject, body):
     msg['To'] = to_addr
     msg['Subject'] = subject
 
-    print(msg)
-
     with _smtp_client(config) as client:
         _smtp_login(config, client)
         client.send_message(msg)

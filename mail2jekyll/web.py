@@ -5,17 +5,19 @@ import tempfile
 
 import flask
 
+from mail2jekyll.post import MailData
+
 
 page = flask.Blueprint(__name__, __name__)
 
 
-def create_app(config, queue):
+def create_app(config, post_manager):
     app = flask.Flask(__name__)
 
     app.register_blueprint(page)
 
     app.config['mailgun_api_key'] = config['mailgun']['api_key']
-    app.content_queue = queue
+    app.post_manager = post_manager
 
     return app
 
@@ -24,23 +26,23 @@ def create_app(config, queue):
 def receive_mailgun_message():
     req = flask.request
 
-    valid = verify_mailgun_token(
+    valid_token = verify_mailgun_token(
         api_key=flask.current_app.config['mailgun_api_key'],
         timestamp=req.form['timestamp'],
         token=req.form['token'],
         signature=req.form['signature']
     )
 
-    if not valid:
-        flask.abort(400)
+    if not valid_token:
+        flask.abort(401)
 
-    data = handle_mailgun_form_data(req.form, req.files)
-    flask.current_app.content_queue.put_new_mail(**data)
+    data = get_mailgun_form_data(req.form, req.files)
+    flask.current_app.post_manager.create_from_mail(data)
 
     return flask.jsonify({})
 
 
-def handle_mailgun_form_data(form, files):
+def get_mailgun_form_data(form, files):
     body = form['stripped-html']
 
     attachments = {}
@@ -48,7 +50,7 @@ def handle_mailgun_form_data(form, files):
         content_map = json.loads(form['content-id-map'])
         attachments = write_mailgun_attachments(content_map, files, body)
 
-    return dict(
+    return MailData(
         sender=form['sender'],
         recipient=form['recipient'],
         subject=form['subject'],

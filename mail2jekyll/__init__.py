@@ -11,9 +11,9 @@ def start_server():
     )
 
     config = configuration.load(config_file)
-    queue = post.ContentQueue(config)
+    manager = post.PostManager(config)
 
-    web.create_app(config, queue)\
+    web.create_app(config, manager)\
        .run(**config.get('http', {}))
 
 
