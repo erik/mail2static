@@ -156,7 +156,6 @@ class PostManager:
                 logger.exception('something went wrong')
                 exc_info = traceback.format_exc()
 
-                log.flush()
                 self._send_post_notification(
                     recipient=mail_data.sender,
                     template='failed',
