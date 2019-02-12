@@ -1,3 +1,4 @@
+import logging
 import os
 
 from mail2jekyll import configuration, post, web
@@ -9,6 +10,8 @@ def start_server():
         'MAIL2JEKYLL_CONFIG',
         './mail2jekyll.toml'
     )
+
+    logging.basicConfig(level='DEBUG')
 
     config = configuration.load(config_file)
     manager = post.PostManager(config)

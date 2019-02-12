@@ -16,7 +16,7 @@ setup(
     install_requires=[
         'flask==1.0.2',
         'toml==0.10.0',
-        'attrs==18.2.0'
+        'attrs==18.2.0',
     ],
     classifiers=[
     ]

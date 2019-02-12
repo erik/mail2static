@@ -1,8 +1,10 @@
 import collections
 import datetime as dt
+import io
+import json
+import logging
 import os
 import os.path
-import json
 import re
 import subprocess
 import tempfile
@@ -12,6 +14,9 @@ import traceback
 import attr
 
 from mail2jekyll import mailer
+
+
+logger = logging.getLogger(__name__)
 
 
 @attr.s
@@ -49,10 +54,29 @@ def split_subject_line(subject):
     return (None, None)
 
 
+class logging_capture:
+    _FORMATTER = logging.Formatter(
+        '[%(asctime)s] %(name)s %(levelname)s: %(message)s')
+
+    def __enter__(self):
+        self._stream = io.StringIO()
+        self._handler = logging.StreamHandler(self._stream)
+        self._handler.setFormatter(self._FORMATTER)
+        self._handler.setLevel(logging.DEBUG)
+        logger.addHandler(self._handler)
+
+        return self._handler
+
+    def __exit__(self, _type, _value, _traceback):
+        self._handler.flush()
+        logger.removeHandler(self._handler)
+        self._stream.close()
+
+
 class PostManager:
     _EMAIL_TEMPLATES = {
         'created': {
-            'subject': '[mail2jekyll] post created: "{title}"',
+            'subject': '{site_name}: post created: "{title}"',
             'body': textwrap.dedent(
                 '''\
                 Hi there,
@@ -60,11 +84,15 @@ class PostManager:
                 Looks like {sender} just created a new post, "{title}".
 
                 Hopefully this was you. If it's spam, sorry.
+
+                Full Output:
+                ============\n
+                {output}
                 ''')
         },
 
         'failed': {
-            'subject': '[mail2jekyll] failed to create post',
+            'subject': '{site_name} failed to create post',
             'body': textwrap.dedent(
                 '''\
                 Hi there,
@@ -72,8 +100,13 @@ class PostManager:
                 Seems like that post failed to render for some reason.
 
                 Traceback:
-
+                ==========\n
                 {traceback}
+
+
+                Full Output:
+                ============\n
+                {output}
                 ''')
         }
     }
@@ -101,28 +134,39 @@ class PostManager:
             print(f'Skipping unauthenticated mail')
             return
 
-        try:
-            title = site.create_post(mail_data)
-            self._send_post_notification(
-                recipient=mail_data.sender,
-                template='created',
-                params={
-                    'title': title,
-                    'sender': mail_data.sender,
-                })
-        except Exception as exc:
-            print(f'bad things: {exc}')
+        self._try_create_post(site, mail_data)
 
-            exc_info = traceback.format_exc()
+    def _try_create_post(self, site, mail_data):
+        with logging_capture() as log:
+            try:
+                title = site.create_post(mail_data)
 
-            self._send_post_notification(
-                recipient=mail_data.sender,
-                template='failed',
-                params={
-                    'mail': mail_data,
-                    'exception': exc,
-                    'traceback': exc_info
-                })
+                output = log.stream.getvalue()
+                self._send_post_notification(
+                    recipient=mail_data.sender,
+                    template='created',
+                    params={
+                        'site_name': site.name,
+                        'title': title,
+                        'sender': mail_data.sender,
+                        'output': output,
+                    })
+
+            except Exception as exc:
+                logger.exception('something went wrong')
+                exc_info = traceback.format_exc()
+
+                log.flush()
+                self._send_post_notification(
+                    recipient=mail_data.sender,
+                    template='failed',
+                    params={
+                        'site_name': site.name,
+                        'mail': mail_data,
+                        'exception': exc,
+                        'traceback': exc_info,
+                        'output': log.stream.getvalue(),
+                    })
 
     def _send_post_notification(self, recipient, template, params):
         template = self._EMAIL_TEMPLATES[template]
@@ -136,7 +180,7 @@ class PostManager:
 
 class SiteManager:
     def __init__(self, name, site_config):
-        self._name = name
+        self.name = name
         self._config = site_config
 
     def create_post(self, mail_data):
@@ -167,11 +211,21 @@ class SiteManager:
         if name not in self._config:
             return
 
+        script = self._config[name]
         cwd = self._config['directory']
-        return subprocess.run(
-            self._config[name],
+
+        logger.info('running "%s" script: cwd="%s", script="%s"',
+                    name, cwd, script)
+
+        proc = subprocess.run(
+            script,
+            stdout=subprocess.PIPE,
+            universal_newlines=True,
             cwd=cwd,
+            check=True,
             shell=True)
+
+        logger.info('output:\n%s', proc.stdout)
 
     def _rewrite_asset_locations(self, mail_data):
         # TODO: include post title to uniqueify?
@@ -180,6 +234,7 @@ class SiteManager:
             self._config['asset_base_path'],
             mail_data.post_path
         )
+        logger.info('moving post assets into "%s"', assets_path)
         os.makedirs(assets_path, exist_ok=True)
 
         body = mail_data.body
@@ -188,7 +243,7 @@ class SiteManager:
             new_path = os.path.join(assets_path, name)
             os.rename(temp_path, new_path)
 
-            print(f'rename {temp_path} -> {new_path}')
+            logger.info('renaming %s (%s) to %s', temp_path, name, new_path)
 
             asset_url = os.path.join(
                 '/',
@@ -202,7 +257,7 @@ class SiteManager:
 
     def _write_post(self, post_path, markdown):
         (title, body) = _split_markdown_post_content(markdown)
-        print(f'title => {title}\nmarkdown => {body}')
+        logger.info('extracted title: "%s"', title)
 
         posts_path = os.path.join(
             self._config['directory'],
@@ -214,6 +269,7 @@ class SiteManager:
             self._file_name_for_title(title))
 
         os.makedirs(posts_path, exist_ok=True)
+        logger.info('writing post to: "%s"', post_path)
 
         with open(post_path, 'w') as fp:
             fp.write(self._config['post_template'].format(
