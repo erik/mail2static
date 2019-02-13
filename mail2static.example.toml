@@ -1,29 +1,59 @@
+# Settings used by built in Flask development server
 [http]
 host = '127.0.0.1'
 port = 8080
 debug = true
 
+
+# Credentials for sending status emails once a post is built.
 [smtp]
 host = 'smtp.wherever.org'
 port = 465
 email = '...'
 password = '...'
 
+
+# API Key for mailgun.com (https://signup.mailgun.com/new/signup)
 [mailgun]
 api_key = '...'
 
-[sites.testblog]
+
+# Configuration for an individual site.
+[sites.myblog]
+# Scripts to be run before and after the post is created.
+# Here's where you'd do Git stuff or deployment or whatever.
 before_run = 'echo "before post is added"'
 after_run = 'echo "after post is added"'
+
+# Path to directory containing static site content.
 directory = '/path/to/directory'
-post_base_path = '_posts/'
-asset_base_path = 'assets/'
-asset_base_url = '/assets/'
+
+# Email address connected to this particular site.
 inbox_address = '...'
-secret = '...'
+# List of email addresses that are allowed to create content on this
+# site. Empty for no whitelist.
 approved_senders = []
+# Secret value that must be sent in the subject line, formatted
+# between angle brackets (like "<SECRET>")
+secret = '...'
+
+# Where to write new posts, relative to `directory`
+post_base_path = '_posts/'
+
+# Write new posts with template, filling in {title} and {content}.
 post_template = '''---
 layout: post
 title: {title}
 ---
 {content}'''
+
+# Where to write images, etc, relative to `directory`
+asset_base_path = 'assets/'
+# The URL base for assets
+asset_base_url = '/assets/'
+
+
+# Optionally, add more configuration blocks if you're supporting
+# multiple sites. Just make sure `inbox_address` is different.
+[sites.anotherblog]
+# ...
