@@ -4,12 +4,12 @@ __version__ = '1.2.0'
 
 
 setup(
-    name='mail2jekyll',
+    name='mail2static',
     version=__version__,
     description='',
     long_description='',
     author='Erik Price',
-    url='https://github.com/erik/mail2jekyll',
+    url='https://github.com/erik/mail2static',
     packages=find_packages(),
     python_requires='>=3.5',
     license='AGPLv3+',

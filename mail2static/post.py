@@ -13,7 +13,7 @@ import traceback
 
 import attr
 
-from mail2jekyll import mailer
+from mail2static import mailer
 
 
 logger = logging.getLogger(__name__)

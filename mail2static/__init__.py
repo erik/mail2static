@@ -1,14 +1,14 @@
 import logging
 import os
 
-from mail2jekyll import configuration, post, web
+from mail2static import configuration, post, web
 
 
 def start_server():
     # TODO: this sucks
     config_file = os.environ.get(
-        'MAIL2JEKYLL_CONFIG',
-        './mail2jekyll.toml'
+        'MAIL2STATIC_CONFIG',
+        './mail2static.toml'
     )
 
     logging.basicConfig(level='DEBUG')

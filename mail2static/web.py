@@ -5,7 +5,7 @@ import tempfile
 
 import flask
 
-from mail2jekyll.post import MailData
+from mail2static.post import MailData
 
 
 page = flask.Blueprint(__name__, __name__)

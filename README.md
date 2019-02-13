@@ -24,7 +24,7 @@ Get the code.
 Start by copying the example configuration file.
 
 ``` console
-cp mail2jekyll.{example.,}toml
+cp mail2static.{example.,}toml
 ```
 
 TODO write the rest of it
