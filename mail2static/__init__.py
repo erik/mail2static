@@ -1,19 +1,12 @@
 import logging
-import os
 
 from mail2static import configuration, post, web
 
 
 def start_server():
-    # TODO: this sucks
-    config_file = os.environ.get(
-        'MAIL2STATIC_CONFIG',
-        './mail2static.toml'
-    )
-
     logging.basicConfig(level='DEBUG')
 
-    config = configuration.load(config_file)
+    config = configuration.load()
     manager = post.PostManager(config)
 
     web.create_app(config, manager)\
